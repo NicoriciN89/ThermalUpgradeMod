@@ -1,49 +1,49 @@
 # ThermalUpgrade — The Long Dark Mod
 
-Мод для **The Long Dark** (v2.55+), добавляющий возможность крафта улучшенных версий базового термобелья и шерстяных кальсонов.
+A mod for **The Long Dark** (v2.55+) that adds craftable upgraded versions of the base-layer thermal underwear and wool longjohns.
 
-## Что добавляет
+## What it adds
 
-| Предмет | Теплота | Влажн. | Ветрозащита | Крафт |
+| Item | Warmth | Warmth (wet) | Windproof | Craft time |
 |---|---|---|---|---|
-| **Улучшенное термобелье** | +3.5°C | +0.9°C | 8% | 90 мин |
-| **Улучшенные шерстяные кальсоны** | +5.0°C | +1.7°C | 5% | 120 мин |
+| **Reinforced Thermal Underwear** | +3.5°C | +0.9°C | 8% | 90 min |
+| **Reinforced Wool Longjohns** | +5.0°C | +1.7°C | 5% | 120 min |
 
-## Рецепты крафта
+## Crafting recipes
 
-Оба предмета крафтятся на **Верстаке** с использованием **Набора для шитья**:
+Both items are crafted at a **Workbench** using a **Sewing Kit**:
 
-- **1x** оригинальная вещь (термобельё / шерстяные кальсоны)
-- **2x** Ткань
-- **1x** Высушенная кожа
+- **1x** original garment (Thermal Underwear / Wool Longjohns)
+- **2x** Cloth
+- **1x** Cured Leather
 
-## Установка
+## Installation
 
-**Требования:**
+**Requirements:**
 - [MelonLoader](https://melonwiki.xyz/) v0.7.2+
 - [ModComponent](https://github.com/ds5678/ModComponent) 7.0.0+
 
-**Установка:**
-1. Скачай последний релиз из [Releases](../../releases)
-2. Скопируй `ThermalUpgrade.dll` и `ThermalUpgrade.modcomponent` в папку `Mods/` игры
+**Steps:**
+1. Download the latest release from [Releases](../../releases)
+2. Copy `ThermalUpgrade.dll` and `ThermalUpgrade.modcomponent` into the `Mods/` folder of your game installation
 
-## Сборка из исходников
+## Building from source
 
-Требуется .NET SDK 8.0 и установленная игра с MelonLoader.
+Requires .NET SDK 8.0 and a game installation with MelonLoader.
 
-1. Клонируй репозиторий
-2. Укажи путь к игре в `ThermalUpgrade.csproj` (переменная `GameDir`)
-3. Запусти сборку:
+1. Clone the repository
+2. Set the game path in `ThermalUpgrade.csproj` (variable `GameDir`)
+3. Run the build script:
    ```powershell
-   .\build.ps1          # собрать DLL + modcomponent
-   .\build.ps1 -ModOnly # только перепаковать modcomponent
+   .\build.ps1          # build DLL + repack modcomponent
+   .\build.ps1 -ModOnly # repack modcomponent only
    ```
 
-## Локализация
+## Localization
 
-Поддерживаются все 19 языков The Long Dark:
-English, Russian, German, French, Japanese, Korean, Simplified/Traditional Chinese, Swedish, Turkish, Norwegian, Spanish, Portuguese (PT/BR), Dutch, Finnish, Italian, Polish, Ukrainian.
+All 19 languages supported by The Long Dark are included:
+English, Russian, German, French, Japanese, Korean, Simplified Chinese, Traditional Chinese, Swedish, Turkish, Norwegian, Spanish, Portuguese (PT/BR), Dutch, Finnish, Italian, Polish, Ukrainian.
 
-## Лицензия
+## License
 
 MIT

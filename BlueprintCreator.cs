@@ -108,26 +108,25 @@ internal static class BlueprintCreator
         if (gi == null) throw new Exception($"GearItem не найден на {newId}");
         if (ci == null) throw new Exception($"ClothingItem не найден на {newId}");
 
-        // 4. Создаём НОВЫЙ GearItemData (чтобы не испортить ванильный)
+        // 4. Создаём новый GearItemData, копируем все поля из ванильного
         var origGid = gi.m_GearItemData;
         var newGid  = ScriptableObject.CreateInstance<GearItemData>();
+        newGid.name             = newId + "_Data";
 
-        // Копируем необходимые поля
-        newGid.m_Type           = origGid.m_Type;           // GearType.Clothing
-        newGid.m_IconData       = origGid.m_IconData;       // reuse vanilla icon
-        newGid.m_ConditionType  = origGid.m_ConditionType;
+        // Копируем ВСЕ поля, включая m_IconData (ссылка на тот же ScriptableObject — иконка ванильная)
+        newGid.m_Type            = origGid.m_Type;
+        newGid.m_IconData        = origGid.m_IconData;
+        newGid.m_ConditionType   = origGid.m_ConditionType;
         newGid.m_AllowFavoriting = true;
+        newGid.m_DailyHPDecay    = origGid.m_DailyHPDecay;
 
         // Наши уникальные значения
-        newGid.m_BaseWeight   = ItemWeight.FromKilograms(weightKG);
-        newGid.m_MaxHP        = maxHP;
-        newGid.m_DailyHPDecay = origGid.m_DailyHPDecay;
+        newGid.m_BaseWeight = ItemWeight.FromKilograms(weightKG);
+        newGid.m_MaxHP      = maxHP;
 
         // Локализация
         newGid.m_LocalizedName        = new LocalizedString { m_LocalizationID = locNameKey };
         newGid.m_LocalizedDescription = new LocalizedString { m_LocalizationID = locDescKey };
-
-        // Аудио: пропускаем копирование (требует дополнительную Wwise-сборку)
 
         gi.m_GearItemData = newGid;
 
