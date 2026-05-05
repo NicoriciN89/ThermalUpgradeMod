@@ -1,0 +1,20 @@
+# Build output
+bin/
+obj/
+
+# Game references (не коммитим DLL игры)
+tools/Inspector/
+tools/InspectDll.csx
+
+# Test project
+TestProj/
+
+# VS / Rider
+.vs/
+.idea/
+*.user
+*.suo
+
+# Compiled mod output (в игре лежит отдельно)
+*.dll
+*.modcomponent
