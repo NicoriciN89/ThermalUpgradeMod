@@ -18,3 +18,22 @@ TestProj/
 # Compiled mod output (в игре лежит отдельно)
 *.dll
 *.modcomponent
+
+# Unity project (слишком большой)
+UnityIconProject/Library/
+UnityIconProject/Logs/
+UnityIconProject/Temp/
+UnityIconProject/obj/
+UnityIconProject/.vs/
+*.log
+
+# Tripo3d export (временные файлы)
+Tripo3d_Unity_Bridge/
+
+# Asset bundle (включён в modcomponent)
+modcomponent/bundle/*.bundle
+
+# Temporary icons
+*.png
+!tools/*.png
+!modcomponent/*.png

@@ -71,6 +71,10 @@
       <HintPath>$(Il2CppDir)\UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>$(Il2CppDir)\UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Il2CppTLD.IntBackedUnit">
       <HintPath>$(Il2CppDir)\Il2CppTLD.IntBackedUnit.dll</HintPath>
       <Private>false</Private>
@@ -81,6 +85,9 @@
   <ItemGroup>
     <Compile Remove="tools\**" />
     <Compile Remove="TestProj\**" />
+    <Compile Remove="UnityIconProject\**" />
+    <Compile Remove="modcomponent\**" />
+    <Compile Remove="Tripo3d_Unity_Bridge\**" />
   </ItemGroup>
 
   <!-- После сборки: копировать DLL в Mods/ -->

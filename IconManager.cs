@@ -1,16 +1,13 @@
 using MelonLoader;
 using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
 using Il2Cpp;
 using Il2CppTLD.Gear;
+using System.IO.Compression;
+using System.IO;
+using System.Linq;
 
 namespace ThermalUpgrade;
 
-/// <summary>
-/// Назначает ванильные иконки нашим улучшенным предметам.
-/// Это нужно потому что у наших предметов нет кастомного Unity bundle.
-/// </summary>
 internal static class IconManager
 {
     private static bool _iconsAssigned = false;
@@ -19,93 +16,144 @@ internal static class IconManager
     {
         if (_iconsAssigned) return;
 
+        string tempPath = null;
+        UnityEngine.AssetBundle bundle = null;
+
         try
         {
-            // Загружаем ванильный Thermal Underwear prefab
-            var thermalHandle = Addressables.LoadAssetAsync<GameObject>(Core.PATH_THERMAL);
-            var thermalPrefab = thermalHandle.WaitForCompletion();
-            if (thermalPrefab != null)
+            // Загружаем наши кастомные спрайты напрямую из бандла (минуя Addressables)
+            // Путь к Mods/ — рядом с tld.exe
+            var gameDir = System.IO.Path.GetDirectoryName(System.AppDomain.CurrentDomain.BaseDirectory
+                              .TrimEnd(System.IO.Path.DirectorySeparatorChar,
+                                       System.IO.Path.AltDirectorySeparatorChar));
+            var zipPath = System.IO.Path.Combine(
+                System.AppDomain.CurrentDomain.BaseDirectory, "Mods", "ThermalUpgrade.modcomponent");
+
+            if (!File.Exists(zipPath))
             {
-                var vanillaItem = thermalPrefab.GetComponent<GearItem>();
-                if (vanillaItem != null && vanillaItem.m_GearItemData != null)
-                {
-                    var iconData = vanillaItem.m_GearItemData.m_IconData;
-                    ApplyIconToModItem(Core.ID_THERMAL_UPGRADED, iconData, "термобелья");
-                }
+                Core.Logger.Warning($"[IconManager] modcomponent не найден: {zipPath}");
+                return;
             }
 
-            // Загружаем ванильный Wool Longjohns prefab
-            var woolHandle = Addressables.LoadAssetAsync<GameObject>(Core.PATH_WOOL);
-            var woolPrefab = woolHandle.WaitForCompletion();
-            if (woolPrefab != null)
+            // Извлекаем bundle во временный файл — LoadFromFile надёжнее LoadFromMemory
+            tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "thermalupgradeicons.bundle");
+            
+            using (var zip = ZipFile.OpenRead(zipPath))
             {
-                var vanillaItem = woolPrefab.GetComponent<GearItem>();
-                if (vanillaItem != null && vanillaItem.m_GearItemData != null)
+                var entry = zip.GetEntry("bundle/thermalupgradeicons_assets_all.bundle");
+                if (entry == null)
                 {
-                    var iconData = vanillaItem.m_GearItemData.m_IconData;
-                    ApplyIconToModItem(Core.ID_WOOL_UPGRADED, iconData, "шерстяных кальсон");
+                    Core.Logger.Warning("[IconManager] bundle entry не найден в zip");
+                    return;
                 }
+                entry.ExtractToFile(tempPath, overwrite: true);
             }
+
+            bundle = UnityEngine.AssetBundle.LoadFromFile(tempPath);
+            if (bundle == null)
+            {
+                Core.Logger.Warning("[IconManager] AssetBundle.LoadFromFile вернул null");
+                return;
+            }
+
+            Core.Logger.Msg($"[IconManager] Bundle загружен. Assets: {string.Join(", ", bundle.GetAllAssetNames())}");
+
+            // Загружаем спрайты (ТОЧНЫЕ пути из bundle - регистр важен!)
+            var thermalSprite = bundle.LoadAsset<Sprite>("Assets/Icons/ico_GearItem__ThermalUnderwearUpgraded.png");
+            var woolSprite    = bundle.LoadAsset<Sprite>("Assets/Icons/ico_GearItem__WoolLongjohnsUpgraded.png");
+
+            Core.Logger.Msg($"[IconManager] thermalSprite = {(thermalSprite == null ? "NULL" : thermalSprite.name)}");
+            Core.Logger.Msg($"[IconManager] woolSprite = {(woolSprite == null ? "NULL" : woolSprite.name)}");
+
+            // Назначаем спрайты напрямую на шаблоны через рефлексию
+            if (thermalSprite != null && BlueprintCreator.thermalTemplate?.m_GearItemData != null)
+                SetIconSprite(BlueprintCreator.thermalTemplate.m_GearItemData, thermalSprite, "термобелья");
+
+            if (woolSprite != null && BlueprintCreator.woolTemplate?.m_GearItemData != null)
+                SetIconSprite(BlueprintCreator.woolTemplate.m_GearItemData, woolSprite, "кальсонов");
 
             _iconsAssigned = true;
-            Core.Logger.Msg("[IconManager] Иконки назначены успешно.");
+            Core.Logger.Msg("[IconManager] Готово.");
         }
         catch (System.Exception ex)
         {
-            Core.Logger.Warning($"[IconManager] Не удалось назначить иконки: {ex.Message}");
+            Core.Logger.Warning($"[IconManager] Ошибка: {ex}");
         }
-    }
-
-    private static void ApplyIconToModItem(string gearId, GearItemInventoryIconData iconData, string logName)
-    {
-        if (iconData == null) return;
-
-        // Ищем загруженный prefab нашего мод-предмета через GearItem
-        // ModComponent регистрирует предметы в Unity resources
-        var allGearItems = Resources.FindObjectsOfTypeAll<GearItem>();
-        foreach (var gi in allGearItems)
+        finally
         {
-            if (gi == null) continue;
-            // Проверяем имя объекта (ModComponent называет объекты по GEAR_ ID)
-            if (gi.name == gearId || gi.name == gearId + "(Clone)")
+            // Выгружаем bundle и удаляем временный файл
+            if (bundle != null) bundle.Unload(false);
+            if (!string.IsNullOrEmpty(tempPath) && File.Exists(tempPath))
             {
-                if (gi.m_GearItemData != null)
-                {
-                    gi.m_GearItemData.m_IconData = iconData;
-                    Core.Logger.Msg($"[IconManager] Иконка {logName} применена к {gearId}.");
-                    return;
-                }
+                try { File.Delete(tempPath); }
+                catch { /* игнорируем ошибки удаления */ }
             }
         }
-
-        // Fallback: ищем через Addressables
-        TryAssignViaGameManager(gearId, iconData, logName);
     }
 
-    private static void TryAssignViaGameManager(string gearId, GearItemInventoryIconData iconData, string logName)
+    private static void SetIconSprite(GearItemData gid, Sprite sprite, string logName)
     {
         try
         {
-            // Addressables lookup for the mod item itself
-            var handle = Addressables.LoadAssetAsync<GameObject>(gearId);
-            var prefab = handle.WaitForCompletion();
-            if (prefab != null)
+            if (gid == null)
             {
-                var gi = prefab.GetComponent<GearItem>();
-                if (gi != null && gi.m_GearItemData != null)
+                Core.Logger.Warning($"[IconManager] SetIconSprite ({logName}): gid == null");
+                return;
+            }
+            if (sprite == null)
+            {
+                Core.Logger.Warning($"[IconManager] SetIconSprite ({logName}): sprite == null");
+                return;
+            }
+
+            Core.Logger.Msg($"[IconManager] SetIconSprite ({logName}): начало. m_IconData = {(gid.m_IconData == null ? "NULL" : "NOT NULL")}");
+
+            if (gid.m_IconData == null)
+            {
+                Core.Logger.Msg($"[IconManager] Создаём новый GearItemInventoryIconData...");
+                // Для Il2Cpp объектов CreateInstance может не работать напрямую
+                // Попробуем найти существующий IconData из ванильного предмета и клонировать его
+                var vanillaIconData = Resources.FindObjectsOfTypeAll<GearItemInventoryIconData>().FirstOrDefault();
+                if (vanillaIconData != null)
                 {
-                    gi.m_GearItemData.m_IconData = iconData;
-                    Core.Logger.Msg($"[IconManager] (Fallback) Иконка {logName} применена к {gearId}.");
+                    gid.m_IconData = UnityEngine.Object.Instantiate(vanillaIconData);
+                    Core.Logger.Msg($"[IconManager] GearItemInventoryIconData создан через Instantiate.");
+                }
+                else
+                {
+                    Core.Logger.Warning($"[IconManager] Не удалось найти ванильный IconData для клонирования!");
+                    return;
                 }
             }
+
+            var iconData = gid.m_IconData;
+            
+            // ВРЕМЕННОЕ РЕШЕНИЕ: используем ванильные IconData
+            // (пока не разберусь как правильно устанавливать кастомные спрайты в Il2Cpp)
+            var vanillaThermal = BlueprintCreator.FindVanillaGearItem("GEAR_LongUnderwear");
+            if (vanillaThermal != null && vanillaThermal.m_GearItemData?.m_IconData != null && logName.Contains("термобелья"))
+            {
+                Core.Logger.Msg($"[IconManager] Используем IconData из GEAR_LongUnderwear");
+                gid.m_IconData = vanillaThermal.m_GearItemData.m_IconData;
+                return;
+            }
+            
+            var vanillaWool = BlueprintCreator.FindVanillaGearItem("GEAR_LongUnderwearWool");
+            if (vanillaWool != null && vanillaWool.m_GearItemData?.m_IconData != null && logName.Contains("кальсонов"))
+            {
+                Core.Logger.Msg($"[IconManager] Используем IconData из GEAR_LongUnderwearWool");
+                gid.m_IconData = vanillaWool.m_GearItemData.m_IconData;
+                return;
+            }
+            
+            Core.Logger.Warning($"[IconManager] Не удалось установить IconData для {logName}");
         }
-        catch
+        catch (System.Exception ex)
         {
-            Core.Logger.Warning($"[IconManager] Иконка для {gearId} не применена - предмет не найден.");
+            Core.Logger.Warning($"[IconManager] SetIconSprite ({logName}): {ex}");
         }
     }
 
-    // Вызывается при выходе в главное меню (сброс флага)
     public static void Reset()
     {
         _iconsAssigned = false;

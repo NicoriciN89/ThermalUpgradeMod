@@ -6,6 +6,8 @@ using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using System;
+using System.Linq;
 
 namespace ThermalUpgrade;
 
@@ -20,28 +22,6 @@ internal static class BlueprintCreator
     private  static bool     initialized     = false;
 
     // -------------------------------------------------------------------------
-    // Harmony: Panel_Crafting.Initialize — Prefix (Priority.High, до ModComponent)
-    // -------------------------------------------------------------------------
-    [HarmonyPatch(typeof(Panel_Crafting), nameof(Panel_Crafting.Initialize))]
-    [HarmonyPriority(Priority.High)]
-    internal static class Patch_PanelCrafting_Init
-    {
-        static void Prefix()
-        {
-            if (initialized) return;
-            try
-            {
-                CreateTemplates();
-                initialized = true;
-            }
-            catch (Exception e)
-            {
-                MelonLogger.Error($"[ThermalUpgrade] Ошибка создания шаблонов: {e}");
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
     // Harmony: BlueprintManager.LoadAllUserBlueprints — Postfix
     // -------------------------------------------------------------------------
     [HarmonyPatch(typeof(Il2CppTLD.Gear.BlueprintManager),
@@ -50,7 +30,21 @@ internal static class BlueprintCreator
     {
         static void Postfix(Il2CppTLD.Gear.BlueprintManager __instance)
         {
-            AddBlueprints(__instance);
+            // Создаём шаблоны здесь — blueprints уже загружены, GearItem-ы доступны
+            if (!initialized)
+            {
+                try
+                {
+                    CreateTemplates();
+                    initialized = true;
+                    int addedCount = AddBlueprints(__instance);
+                    MelonLogger.Msg($"[ThermalUpgrade] Добавлено {addedCount} чертежей в BlueprintManager.");
+                }
+                catch (Exception e)
+                {
+                    MelonLogger.Error($"[ThermalUpgrade] Ошибка создания шаблонов/чертежей: {e}");
+                }
+            }
         }
     }
 
@@ -90,19 +84,19 @@ internal static class BlueprintCreator
         float warmth, float windproof, float waterproofness, float warmthWhenWet,
         float weightKG, float maxHP)
     {
-        // 1. Загружаем ванильный prefab через Addressables
-        var vanillaPrefab = Addressables.LoadAssetAsync<GameObject>(vanillaId).WaitForCompletion();
-        if (vanillaPrefab == null)
-            throw new Exception($"Не удалось загрузить ванильный prefab: {vanillaId}");
+        // 1. Находим ванильный GearItem уже загруженный в памяти игры
+        var vanillaGi = FindVanillaGearItem(vanillaId);
+        if (vanillaGi == null)
+            throw new Exception($"Ванильный GearItem не найден в памяти: {vanillaId}");
 
-        // 2. Создаём клон (он становится scene-объектом)
-        var go = UnityEngine.Object.Instantiate(vanillaPrefab);
+        // 2. Создаём клон
+        var go = UnityEngine.Object.Instantiate(vanillaGi.gameObject);
         go.name = newId;
         go.SetActive(false);                 // не рендерим в мире
         UnityEngine.Object.DontDestroyOnLoad(go);
 
         // 3. Получаем компоненты
-        var gi = go.GetComponent<GearItem>();
+        var gi  = go.GetComponent<GearItem>();
         var ci = go.GetComponent<ClothingItem>();
 
         if (gi == null) throw new Exception($"GearItem не найден на {newId}");
@@ -130,6 +124,8 @@ internal static class BlueprintCreator
 
         gi.m_GearItemData = newGid;
 
+        MelonLogger.Msg($"[ThermalUpgrade] {newId}: m_IconData = {(newGid.m_IconData == null ? "NULL" : newGid.m_IconData.name)}");
+
         // 5. Устанавливаем характеристики одежды
         ci.m_Warmth         = warmth;
         ci.m_WarmthWhenWet  = warmthWhenWet;
@@ -142,47 +138,52 @@ internal static class BlueprintCreator
     // =========================================================================
     // Добавление чертежей в BlueprintManager
     // =========================================================================
-    private static void AddBlueprints(Il2CppTLD.Gear.BlueprintManager bm)
+    private static int AddBlueprints(Il2CppTLD.Gear.BlueprintManager bm)
     {
         if (thermalTemplate == null || woolTemplate == null)
         {
             MelonLogger.Warning("[ThermalUpgrade] Шаблоны не готовы — чертежи не добавлены.");
-            return;
+            return 0;
         }
 
+        int count = 0;
         try
         {
-            // Чертёж 1: улучшение термобелья
+            // Чертёж 1: улучшение термобелья (ВРЕМЕННО: только базовый предмет)
             var bp1 = BuildBlueprint(
                 "BP_UpgradeThermal",
                 thermalTemplate,
                 new[]
                 {
                     (Core.ID_THERMAL_VANILLA, 1),
-                    ("GEAR_Cloth",        2),
-                    ("GEAR_LeatherDried", 1),
                 },
-                toolGearId: "GEAR_SewingKit",
+                toolGearId: null,
                 durationMinutes: 90,
-                location: CraftingLocation.Workbench
+                location: CraftingLocation.Anywhere
             );
-            if (bp1 != null) bm.m_AllBlueprints.Add(bp1);
+            if (bp1 != null) 
+            {
+                bm.m_AllBlueprints.Add(bp1);
+                count++;
+            }
 
-            // Чертёж 2: улучшение шерстяных кальсонов
+            // Чертёж 2: улучшение шерстяных кальсонов (ВРЕМЕННО: только базовый предмет)
             var bp2 = BuildBlueprint(
                 "BP_UpgradeWool",
                 woolTemplate,
                 new[]
                 {
-                    (Core.ID_WOOL_VANILLA,    1),
-                    ("GEAR_Cloth",            2),
-                    ("GEAR_LeatherDried",     1),
+                    (Core.ID_WOOL_VANILLA, 1),
                 },
-                toolGearId: "GEAR_SewingKit",
+                toolGearId: null,
                 durationMinutes: 120,
-                location: CraftingLocation.Workbench
+                location: CraftingLocation.Anywhere
             );
-            if (bp2 != null) bm.m_AllBlueprints.Add(bp2);
+            if (bp2 != null) 
+            {
+                bm.m_AllBlueprints.Add(bp2);
+                count++;
+            }
 
             MelonLogger.Msg("[ThermalUpgrade] Чертежи улучшения термобелья добавлены.");
         }
@@ -190,6 +191,8 @@ internal static class BlueprintCreator
         {
             MelonLogger.Error($"[ThermalUpgrade] Ошибка добавления чертежей: {e}");
         }
+        
+        return count;
     }
 
     private static Il2CppTLD.Gear.BlueprintData BuildBlueprint(
@@ -215,6 +218,10 @@ internal static class BlueprintCreator
         bp.m_CanIncreaseRepairSkill = true;
         bp.m_AppliedSkill          = SkillType.ClothingRepair;
         bp.m_ImprovedSkill         = SkillType.ClothingRepair;
+        bp.m_UsesPhoto             = false;
+
+        MelonLogger.Msg($"[ThermalUpgrade] Blueprint {blueprintName}: location={location}, RequiresLight={bp.m_RequiresLight}, RequiresLitFire={bp.m_RequiresLitFire}, Locked={bp.m_Locked}");
+        MelonLogger.Msg($"[ThermalUpgrade] Blueprint {blueprintName}: m_CraftedResultGear = {(bp.m_CraftedResultGear != null ? bp.m_CraftedResultGear.name : "NULL")}, Count={bp.m_CraftedResultCount}");
 
         // Инициализируем обязательные Il2Cpp-коллекции пустыми значениями.
         // Если оставить null — ShouldDisableForCurrentMode() и HasRequiredMaterials()
@@ -228,16 +235,10 @@ internal static class BlueprintCreator
         var reqList = new System.Collections.Generic.List<Il2CppTLD.Gear.BlueprintData.RequiredGearItem>();
         foreach (var (gearId, count) in requiredGear)
         {
-            var prefab = Addressables.LoadAssetAsync<GameObject>(gearId).WaitForCompletion();
-            if (prefab == null)
-            {
-                MelonLogger.Warning($"[ThermalUpgrade] Не найден ванильный предмет: {gearId}");
-                return null;
-            }
-            var gi = prefab.GetComponent<GearItem>();
+            var gi = FindVanillaGearItem(gearId);
             if (gi == null)
             {
-                MelonLogger.Warning($"[ThermalUpgrade] Нет GearItem на prefab: {gearId}");
+                MelonLogger.Warning($"[ThermalUpgrade] Не найден GearItem: {gearId}");
                 return null;
             }
 
@@ -252,14 +253,102 @@ internal static class BlueprintCreator
         for (int i = 0; i < reqList.Count; i++) gearArr[i] = reqList[i];
         bp.m_RequiredGear = gearArr;
 
+        MelonLogger.Msg($"[ThermalUpgrade] Blueprint {blueprintName}: m_RequiredGear.Length = {bp.m_RequiredGear.Length}");
+        for (int i = 0; i < bp.m_RequiredGear.Length; i++)
+        {
+            var rg = bp.m_RequiredGear[i];
+            MelonLogger.Msg($"[ThermalUpgrade]   [{i}] {(rg.m_Item != null ? rg.m_Item.name : "NULL")} x{rg.m_Count}");
+        }
+
         // Инструмент
         if (!string.IsNullOrEmpty(toolGearId))
         {
-            var toolPrefab = Addressables.LoadAssetAsync<GameObject>(toolGearId).WaitForCompletion();
-            if (toolPrefab != null)
-                bp.m_RequiredTool = toolPrefab.GetComponent<ToolsItem>();
+            var toolGi = FindVanillaGearItem(toolGearId);
+            if (toolGi != null)
+            {
+                bp.m_RequiredTool = toolGi.GetComponent<ToolsItem>();
+                MelonLogger.Msg($"[ThermalUpgrade] Blueprint {blueprintName}: m_RequiredTool = {(bp.m_RequiredTool != null ? bp.m_RequiredTool.name : "NULL")}");
+            }
+            else
+            {
+                MelonLogger.Warning($"[ThermalUpgrade] Blueprint {blueprintName}: инструмент {toolGearId} не найден!");
+            }
         }
 
         return bp;
+    }
+
+    // Вспомогательный метод: находит ванильный GearItem уже загруженный в памяти игры
+    internal static GearItem FindVanillaGearItem(string gearId)
+    {
+        // Способ 1: Resources.FindObjectsOfTypeAll (работает если предмет уже инстанциирован)
+        foreach (var gi in Resources.FindObjectsOfTypeAll<GearItem>())
+        {
+            if (gi != null && gi.name == gearId)
+                return gi;
+        }
+
+        // Способ 2: ищем через все загруженные blueprints (m_RequiredGear и m_CraftedResultGear)
+        Il2CppTLD.Gear.BlueprintManager bm = null;
+        try { bm = UnityEngine.Object.FindObjectOfType<Il2CppTLD.Gear.BlueprintManager>(); } catch { }
+        if (bm != null && bm.m_AllBlueprints != null)
+        {
+            foreach (var bp in bm.m_AllBlueprints)
+            {
+                if (bp == null) continue;
+                if (bp.m_CraftedResultGear != null && bp.m_CraftedResultGear.name == gearId)
+                    return bp.m_CraftedResultGear;
+                if (bp.m_RequiredGear != null)
+                {
+                    foreach (var req in bp.m_RequiredGear)
+                    {
+                        if (req?.m_Item != null && req.m_Item.name == gearId)
+                            return req.m_Item;
+                    }
+                }
+            }
+        }
+
+        // Способ 3: загружаем через Addressables по рефлексии.
+        // Il2Cpp Addressables принимает Il2CppSystem.Object (не System.String),
+        // поэтому конвертируем строку через IL2CPP.ManagedStringToIl2Cpp.
+        try
+        {
+            var loadMethod = typeof(Addressables)
+                .GetMethods()
+                .FirstOrDefault(m => m.Name == "LoadAssetAsync" && m.IsGenericMethod);
+            if (loadMethod != null)
+            {
+                var genericLoad = loadMethod.MakeGenericMethod(typeof(GameObject));
+                // Конвертируем C# string → Il2Cpp pointer → Il2CppSystem.Object
+                var ilPtr = Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(gearId);
+                var ilKey = new Il2CppSystem.Object(ilPtr);
+                var handle = genericLoad.Invoke(null, new object[] { ilKey });
+                if (handle != null)
+                {
+                    var waitMethod = handle.GetType().GetMethod("WaitForCompletion");
+                    if (waitMethod != null)
+                    {
+                        var prefab = waitMethod.Invoke(handle, null) as GameObject;
+                        if (prefab != null)
+                        {
+                            var gi = prefab.GetComponent<GearItem>();
+                            if (gi != null)
+                            {
+                                MelonLogger.Msg($"[ThermalUpgrade] Загружен через Addressables: {gearId}");
+                                return gi;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            MelonLogger.Warning($"[ThermalUpgrade] Addressables fallback ({gearId}) failed: {e.Message}");
+        }
+
+        MelonLogger.Warning($"[ThermalUpgrade] FindVanillaGearItem: '{gearId}' не найден");
+        return null;
     }
 }

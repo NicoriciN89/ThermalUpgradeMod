@@ -2,8 +2,6 @@ using MelonLoader;
 using Il2CppInterop.Runtime;
 using Il2Cpp;
 using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Collections;
 
 [assembly: MelonInfo(typeof(ThermalUpgrade.Core), "ThermalUpgrade", "1.0.0", "NicoriciN89")]
@@ -21,13 +19,9 @@ public class Core : MelonMod
     public const string ID_THERMAL_UPGRADED  = "GEAR_ThermalUnderwearUpgraded";
     public const string ID_WOOL_UPGRADED     = "GEAR_WoolLongjohnsUpgraded";
 
-    // Vanilla GEAR_ IDs (нужны для копирования иконки)
+    // Vanilla GEAR_ IDs (нужны для поиска в памяти)
     public const string ID_THERMAL_VANILLA   = "GEAR_LongUnderwear";
     public const string ID_WOOL_VANILLA      = "GEAR_LongUnderwearWool";
-
-    // Пути к vanilla prefab-ам в Addressables
-    internal const string PATH_THERMAL = "Assets/Prefabs/Gear/Clothing/Legs/GEAR_LongUnderwear.prefab";
-    internal const string PATH_WOOL    = "Assets/Prefabs/Gear/Clothing/Legs/GEAR_LongUnderwearWool.prefab";
 
     public override void OnInitializeMelon()
     {
@@ -39,9 +33,9 @@ public class Core : MelonMod
     // Запускается после полной загрузки игровой сцены
     public override void OnSceneWasInitialized(int buildIndex, string sceneName)
     {
-        // Сцены: MainMenu = 0, Loading screens, actual game scene = "MainMenu", "Empty" etc.
-        // Пробуем назначить иконки при каждой загрузке игровой сцены
-        if (sceneName != "Boot" && sceneName != "" && buildIndex > 1)
+        // TLD загружает все игровые сцены аддитивно (buildIndex = -1),
+        // поэтому проверяем по имени, а не по индексу
+        if (!string.IsNullOrEmpty(sceneName) && sceneName != "Boot" && sceneName != "Empty")
         {
             MelonCoroutines.Start(AssignIconsCoroutine());
         }
